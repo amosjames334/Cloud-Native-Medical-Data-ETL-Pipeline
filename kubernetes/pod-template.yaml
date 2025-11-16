@@ -1,0 +1,63 @@
+# Kubernetes Pod Template for Transformation Tasks
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medical-etl-transform
+  namespace: airflow
+  labels:
+    app: medical-etl
+    component: transform
+    version: v1
+spec:
+  restartPolicy: Never
+  
+  # Service account for AWS access
+  serviceAccountName: airflow-worker
+  
+  containers:
+  - name: transform
+    image: medical-etl-transform:v1
+    imagePullPolicy: IfNotPresent
+    
+    # Command and arguments (will be overridden by KubernetesPodOperator)
+    command: ["python", "-m", "src.transformers.drug_transformer"]
+    args: ["--date", "2024-01-01", "--bucket", "medical-etl-data-lake"]
+    
+    # Environment variables
+    env:
+    - name: AWS_DEFAULT_REGION
+      value: "us-east-1"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "INFO"
+    
+    # AWS credentials from secret
+    envFrom:
+    - secretRef:
+        name: aws-credentials
+    
+    # Resource limits
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+    
+    # Volume mounts (if needed)
+    volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+  
+  # Volumes
+  volumes:
+  - name: tmp
+    emptyDir: {}
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000

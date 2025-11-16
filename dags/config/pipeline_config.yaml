@@ -1,0 +1,146 @@
+# Medical ETL Pipeline Configuration
+
+# Pipeline metadata
+pipeline:
+  name: medical_etl_pipeline
+  version: "1.0.0"
+  description: "ETL pipeline for FDA and clinical trial data"
+  owner: "data-engineering"
+
+# Data extraction settings
+extraction:
+  fda_limit: 1000  # Max records per day from FDA
+  clinical_trials_limit: 100  # Max records per day from ClinicalTrials.gov
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  timeout_seconds: 30
+
+# Data transformation settings
+transformation:
+  # Severity score weights
+  severity_weights:
+    serious: 2
+    death: 10
+    hospitalization: 5
+  
+  # Age group bins
+  age_groups:
+    - [0, 18, "Pediatric"]
+    - [18, 30, "Young Adult"]
+    - [30, 50, "Adult"]
+    - [50, 65, "Senior"]
+    - [65, 100, "Elderly"]
+  
+  # Study size categories
+  study_size_categories:
+    - [0, 50, "Small"]
+    - [50, 200, "Medium"]
+    - [200, 1000, "Large"]
+    - [1000, 999999, "Very Large"]
+
+# Data quality settings
+quality:
+  # Completeness thresholds (percentage)
+  max_missing_percentage: 10
+  
+  # Minimum record counts
+  min_total_records: 10
+  min_records_per_source: 5
+  
+  # Value range checks
+  age_range: [0, 120]
+  severity_range: [0, 100]
+  
+  # Required fields by data source
+  required_fields:
+    fda:
+      - safetyreportid
+      - receivedate
+      - drug_name
+    clinical_trials:
+      - nct_id
+      - brief_title
+      - overall_status
+
+# S3 storage settings
+storage:
+  # S3 bucket structure
+  raw_prefix: "raw"
+  processed_prefix: "processed"
+  logs_prefix: "logs"
+  
+  # File formats
+  raw_format: "json"
+  processed_format: "parquet"
+  summary_format: "csv"
+  
+  # Compression
+  compression: "snappy"
+  
+  # Partitioning
+  partition_by:
+    - year
+    - month
+    - day
+
+# Kubernetes settings
+kubernetes:
+  namespace: "airflow"
+  image_pull_policy: "IfNotPresent"
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  
+  # Pod settings
+  pod_timeout_seconds: 1800  # 30 minutes
+  pod_delete_policy: true
+
+# Airflow DAG settings
+airflow:
+  schedule_interval: "@daily"
+  catchup: false
+  max_active_runs: 1
+  dagrun_timeout_minutes: 120
+  
+  # Task settings
+  task_retries: 2
+  task_retry_delay_minutes: 5
+  task_timeout_minutes: 60
+  
+  # Email notifications
+  email_on_failure: true
+  email_on_retry: false
+
+# Monitoring and alerting
+monitoring:
+  # Metrics to track
+  track_metrics:
+    - record_count
+    - processing_time
+    - error_rate
+    - data_quality_score
+  
+  # Alert thresholds
+  alerts:
+    max_processing_time_minutes: 60
+    min_record_count: 10
+    max_error_rate: 0.05  # 5%
+    min_quality_score: 0.95  # 95%
+
+# Compliance and governance
+compliance:
+  # Data retention (days)
+  raw_data_retention: 90
+  processed_data_retention: 365
+  logs_retention: 30
+  
+  # Privacy settings
+  pii_fields: []  # No PII in public data
+  
+  # Audit logging
+  enable_audit_log: true
+  audit_log_level: "INFO"

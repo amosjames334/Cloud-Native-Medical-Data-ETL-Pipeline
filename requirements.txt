@@ -1,0 +1,10 @@
+apache-airflow[kubernetes,amazon]==2.7.3
+pandas==2.1.3
+requests==2.31.0
+boto3==1.29.7
+great-expectations==0.18.8
+pytest==7.4.3
+python-dotenv==1.0.0
+pyyaml==6.0.1
+pyarrow==14.0.1
+
