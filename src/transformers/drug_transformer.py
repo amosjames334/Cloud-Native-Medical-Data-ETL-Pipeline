@@ -229,16 +229,58 @@ class DrugTransformer:
             
             # If we have both datasets, try to merge on condition/indication
             if not enriched.empty and 'drug_indication' in fda_df.columns:
-                # This is a simplified merge - in production you'd use better matching
-                enriched['condition_match'] = enriched['drug_name'].str[:10]
-                ct_summary['condition_match'] = ct_summary['condition'].str[:10]
+                # Create mapping between drugs and conditions
+                # Get unique indications for each drug
+                drug_indications = fda_df[['drug_name_clean', 'drug_indication']].drop_duplicates()
                 
-                enriched = enriched.merge(
-                    ct_summary,
-                    on='condition_match',
-                    how='left'
-                )
-                enriched = enriched.drop('condition_match', axis=1)
+                # Normalize strings for matching
+                def normalize(text):
+                    if not isinstance(text, str):
+                        return ""
+                    return text.lower().strip().replace(' ', '')
+                
+                drug_indications['indication_norm'] = drug_indications['drug_indication'].apply(normalize)
+                ct_summary['condition_norm'] = ct_summary['condition'].apply(normalize)
+                
+                # Merge logic
+                merged_data = []
+                
+                for _, drug_row in enriched.iterrows():
+                    drug_name = drug_row['drug_name']
+                    
+                    # Find indications for this drug
+                    indications = drug_indications[
+                        drug_indications['drug_name_clean'] == drug_name
+                    ]['indication_norm'].tolist()
+                    
+                    # Find matching trials
+                    matches = ct_summary[
+                        ct_summary['condition_norm'].apply(
+                            lambda x: any(ind in x or x in ind for ind in indications if ind)
+                        )
+                    ]
+                    
+                    if not matches.empty:
+                        # Aggregate trial data
+                        trial_stats = {
+                            'trial_count': matches['trial_count'].sum(),
+                            'total_enrollment': matches['total_enrollment'].sum(),
+                            'completed_trials': matches['completed_trials'].sum()
+                        }
+                    else:
+                        trial_stats = {
+                            'trial_count': 0,
+                            'total_enrollment': 0,
+                            'completed_trials': 0
+                        }
+                        
+                    # Combine data
+                    row_data = drug_row.to_dict()
+                    row_data.update(trial_stats)
+                    merged_data.append(row_data)
+                
+                enriched = pd.DataFrame(merged_data)
+                
             elif enriched.empty:
                 enriched = ct_summary
         
@@ -302,10 +344,10 @@ class DrugTransformer:
             return 3.0
         elif 'PHASE 2' in phase_str or 'PHASE II' in phase_str:
             return 2.0
-        elif 'PHASE 1' in phase_str or 'PHASE I' in phase_str:
-            return 1.0
         elif 'EARLY' in phase_str:
             return 0.5
+        elif 'PHASE 1' in phase_str or 'PHASE I' in phase_str:
+            return 1.0
         
         return 0.0
 
