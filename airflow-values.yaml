@@ -1,7 +1,4 @@
 ﻿executor: KubernetesExecutor
-dags:
-  gitSync:
-    enabled: false
 env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "False"
@@ -21,3 +18,15 @@ data:
     host: host.docker.internal
     port: 5432
     db: airflow
+
+# Enable Git-Sync for DAGs
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/amosjames334/Cloud-Native-Medical-Data-ETL-Pipeline.git
+    branch: main
+    rev: HEAD
+    depth: 1
+    maxFailures: 0
+    subPath: "dags"
+    wait: 60
