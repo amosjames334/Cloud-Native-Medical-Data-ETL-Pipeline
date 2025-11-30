@@ -46,20 +46,6 @@ class FDAExtractor:
         Returns:
             DataFrame with drug event data
         """
-        logger.info(f"Extracting FDA data from {start_date} to {end_date}")
-        
-        # Convert dates to FDA format (YYYYMMDD)
-        start_fda = start_date.replace('-', '')
-        end_fda = end_date.replace('-', '')
-        
-        # Build query
-        search_query = f"receivedate:[{start_fda}+TO+{end_fda}]"
-        
-        params = {
-            'search': search_query,
-            'limit': min(limit, 1000)  # FDA max is 1000 per request
-        }
-        
         if self.api_key:
             params['api_key'] = self.api_key
         
