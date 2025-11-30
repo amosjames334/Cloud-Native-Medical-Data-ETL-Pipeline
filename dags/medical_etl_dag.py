@@ -177,19 +177,16 @@ with DAG(
         extract_fda = PythonOperator(
             task_id='extract_fda_data',
             python_callable=extract_fda_data,
-            provide_context=True,
         )
         
         extract_ct = PythonOperator(
             task_id='extract_clinical_trials',
             python_callable=extract_clinical_trials,
-            provide_context=True,
         )
         
         validate = PythonOperator(
             task_id='validate_extraction',
             python_callable=validate_extraction,
-            provide_context=True,
             trigger_rule='all_success',
         )
         
@@ -219,14 +216,12 @@ with DAG(
     quality_checks = PythonOperator(
         task_id='quality_checks',
         python_callable=quality_check,
-        provide_context=True,
     )
     
     # Completion notification
     notify = PythonOperator(
         task_id='send_notification',
         python_callable=send_completion_notification,
-        provide_context=True,
     )
     
     # End task
