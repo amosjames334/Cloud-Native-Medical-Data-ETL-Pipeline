@@ -31,8 +31,11 @@ class TestDAGValidation:
         dag_bag = DagBag(dag_folder=DAG_FOLDER, include_examples=False)
         
         for dag_id, dag in dag_bag.dags.items():
+            if len(dag.tasks) == 0:
+                continue
             try:
-                dag.test_cycle()
+                # topological_sort will raise an exception if there's a cycle
+                dag.topological_sort()
             except Exception as e:
                 pytest.fail(f"DAG {dag_id} has a cycle: {e}")
     
