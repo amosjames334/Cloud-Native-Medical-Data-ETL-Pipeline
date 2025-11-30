@@ -163,7 +163,7 @@ with DAG(
     'medical_etl_pipeline',
     default_args=default_args,
     description='ETL pipeline for FDA and clinical trial data',
-    schedule_interval='@daily',
+    schedule='@daily',
     catchup=False,
     tags=['medical', 'etl', 'fda'],
 ) as dag:
