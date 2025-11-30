@@ -191,9 +191,9 @@ if __name__ == '__main__':
     # Test the extractor
     extractor = FDAExtractor()
     data = extractor.extract_drug_events(
-        start_date='2024-01-01',
-        end_date='2024-01-01',
-        limit=100
+        start_date='2025-01-01',
+        end_date='2025-01-30',
+        limit=10
     )
     print(f"Extracted {len(data)} records")
     print(data.head())
