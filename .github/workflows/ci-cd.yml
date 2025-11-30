@@ -58,11 +58,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          # Install Airflow with constraints to avoid dependency conflicts
-          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${{ env.AIRFLOW_VERSION }}/constraints-${{ env.PYTHON_VERSION }}.txt"
-          pip install "apache-airflow==${{ env.AIRFLOW_VERSION }}" --constraint "${CONSTRAINT_URL}"
-          # Install project dependencies
-          pip install -r requirements.txt
+          # Install Airflow with constraints to avoid dependency conflicts and prefer binary wheels
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-2.7.3/constraints-3.9.txt"
+          pip install --prefer-binary "apache-airflow[kubernetes,amazon]==2.7.3" \
+            --constraint "${CONSTRAINT_URL}"
+          # Install project dependencies with same constraints
+          pip install --prefer-binary -r requirements.txt \
+            --constraint "${CONSTRAINT_URL}"
           pip install pytest pytest-cov
       
       - name: Validate DAG syntax
@@ -134,7 +136,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements.txt
+          # Use same constraints as validation job
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-2.7.3/constraints-3.9.txt"
+          pip install --prefer-binary -r requirements.txt \
+            --constraint "${CONSTRAINT_URL}"
           pip install pytest pytest-cov pytest-mock
       
       - name: Run tests with coverage
