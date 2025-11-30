@@ -2,10 +2,6 @@
 Medical ETL Pipeline DAG
 Orchestrates extraction, transformation, and loading of FDA and clinical trial data
 """
-"""
-Medical ETL Pipeline DAG
-Orchestrates extraction, transformation, and loading of FDA and clinical trial data
-"""
 
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -16,6 +12,10 @@ from airflow.operators.empty import EmptyOperator
 from airflow.utils.task_group import TaskGroup
 import yaml
 import os
+import sys
+
+# Add repo root to sys.path to allow importing from src
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Load configuration
 config_path = os.path.join(os.path.dirname(__file__), 'config', 'pipeline_config.yaml')
