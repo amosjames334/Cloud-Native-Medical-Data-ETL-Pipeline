@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical ETL Pipeline - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">🏥</div>
+                    <div>
+                        <h1>Medical ETL Pipeline</h1>
+                        <p class="subtitle">Real-time Monitoring Dashboard</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="refreshBtn" class="btn btn-secondary">
+                        <span class="icon">🔄</span>
+                        Refresh
+                    </button>
+                    <button id="triggerBtn" class="btn btn-primary">
+                        <span class="icon">▶️</span>
+                        Trigger DAG
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Connection Status -->
+        <div id="connectionStatus" class="connection-status">
+            <div class="status-indicator"></div>
+            <span id="statusText">Connecting to Airflow...</span>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon success">✓</div>
+                <div class="stat-content">
+                    <div class="stat-label">Success Rate</div>
+                    <div class="stat-value" id="successRate">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon info">📊</div>
+                <div class="stat-content">
+                    <div class="stat-label">Total Runs</div>
+                    <div class="stat-value" id="totalRuns">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon warning">⏱️</div>
+                <div class="stat-content">
+                    <div class="stat-label">Avg Duration</div>
+                    <div class="stat-value" id="avgDuration">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon primary">🕐</div>
+                <div class="stat-content">
+                    <div class="stat-label">Last Run</div>
+                    <div class="stat-value" id="lastRun">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- DAG Runs Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Recent DAG Runs</h2>
+                    <div class="card-actions">
+                        <select id="dagRunFilter" class="filter-select">
+                            <option value="all">All States</option>
+                            <option value="success">Success</option>
+                            <option value="failed">Failed</option>
+                            <option value="running">Running</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="dagRunsList" class="dag-runs-list">
+                        <div class="loading">Loading DAG runs...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Run Details -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Current Run Details</h2>
+                </div>
+                <div class="card-body">
+                    <div id="currentRunDetails" class="current-run-details">
+                        <div class="empty-state">
+                            <div class="empty-icon">📋</div>
+                            <p>Select a DAG run to view details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Status Grid -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Task Status Grid</h2>
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-color success"></span>Success</span>
+                    <span class="legend-item"><span class="legend-color failed"></span>Failed</span>
+                    <span class="legend-item"><span class="legend-color running"></span>Running</span>
+                    <span class="legend-item"><span class="legend-color queued"></span>Queued</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="taskGrid" class="task-grid">
+                    <div class="loading">Loading task grid...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Logs -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Error Logs</h2>
+                <div class="card-actions">
+                    <input type="text" id="logSearch" class="search-input" placeholder="Search logs...">
+                    <button id="clearLogsBtn" class="btn btn-secondary btn-sm">Clear</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="errorLogs" class="error-logs">
+                    <div class="empty-state">
+                        <div class="empty-icon">✓</div>
+                        <p>No errors to display</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Chart -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Run Statistics (Last 7 Days)</h2>
+            </div>
+            <div class="card-body">
+                <canvas id="statsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trigger DAG Modal -->
+    <div id="triggerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Trigger DAG Run</h3>
+                <button class="modal-close" onclick="closeTriggerModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="executionDate">Execution Date</label>
+                    <input type="date" id="executionDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="dagConfig">Configuration (JSON)</label>
+                    <textarea id="dagConfig" class="form-textarea" rows="6" placeholder='{"key": "value"}'>{
+  "triggered_by": "manual",
+  "source": "dashboard"
+}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTriggerModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitTriggerDAG()">Trigger DAG</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

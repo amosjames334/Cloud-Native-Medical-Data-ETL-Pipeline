@@ -1,15 +1,31 @@
 ﻿executor: KubernetesExecutor
+
 env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "False"
   - name: AWS_DEFAULT_REGION
     value: "us-east-1"
 
-# Disable embedded PostgreSQL (broken image)
+webserver:
+  env:
+    - name: AIRFLOW__API__AUTH_BACKENDS
+      value: "airflow.api.auth.backend.basic_auth"
+    - name: AIRFLOW__WEBSERVER__EXPOSE_CONFIG
+      value: "True"
+    - name: AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX
+      value: "True"
+    - name: AIRFLOW__API__ENABLE_EXPERIMENTAL_API
+      value: "True"
+
+  service:
+    type: LoadBalancer
+    ports:
+      - name: airflow-ui
+        port: 8080
+
 postgresql:
   enabled: false
 
-# Use external PostgreSQL connection
 data:
   metadataConnection:
     user: airflow
@@ -19,7 +35,6 @@ data:
     port: 5432
     db: airflow
 
-# Enable Git-Sync for DAGs
 dags:
   persistence:
     enabled: false

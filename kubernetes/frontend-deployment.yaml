@@ -1,0 +1,156 @@
+---
+# ConfigMap for frontend configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: airflow
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name _;
+        
+        root /usr/share/nginx/html;
+        index index.html;
+        
+        # Gzip compression
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+        
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+        
+        # Cache static assets
+        location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+    }
+
+---
+# Deployment for frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: airflow
+  labels:
+    app: medical-etl-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medical-etl-frontend
+  template:
+    metadata:
+      labels:
+        app: medical-etl-frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: frontend-files
+          mountPath: /usr/share/nginx/html
+          readOnly: true
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: frontend-files
+        configMap:
+          name: frontend-files
+      - name: nginx-config
+        configMap:
+          name: frontend-config
+
+---
+# ConfigMap for frontend files (HTML, CSS, JS)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-files
+  namespace: airflow
+data:
+  # Note: In production, you should build a Docker image with these files
+  # This ConfigMap approach is for quick deployment
+  # Run: kubectl create configmap frontend-files --from-file=frontend/ -n airflow
+  # Or use the provided script to update this ConfigMap
+
+---
+# Service for frontend
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: airflow
+  labels:
+    app: medical-etl-frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: medical-etl-frontend
+
+---
+# Optional: Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: airflow
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Uncomment for HTTPS with cert-manager
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: medical-etl-dashboard.local  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+  # Uncomment for HTTPS
+  # tls:
+  # - hosts:
+  #   - medical-etl-dashboard.local
+  #   secretName: frontend-tls

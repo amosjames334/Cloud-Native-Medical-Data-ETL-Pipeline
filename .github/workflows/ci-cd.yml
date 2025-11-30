@@ -1,0 +1,260 @@
+name: Medical ETL CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dags/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - 'docker/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      trigger_dag:
+        description: 'Trigger Airflow DAG after deployment'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.9'
+  AIRFLOW_VERSION: '2.7.0'
+
+jobs:
+  validate-dags:
+    name: Validate DAG Syntax
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install apache-airflow==${{ env.AIRFLOW_VERSION }}
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: Validate DAG syntax
+        run: |
+          python -m py_compile dags/*.py
+          echo "✅ All DAG files have valid Python syntax"
+      
+      - name: Check for DAG import errors
+        run: |
+          python -c "
+          import sys
+          import os
+          sys.path.insert(0, os.getcwd())
+          from airflow.models import DagBag
+          
+          dag_bag = DagBag(dag_folder='dags/', include_examples=False)
+          
+          if dag_bag.import_errors:
+              print('❌ DAG Import Errors:')
+              for filename, error in dag_bag.import_errors.items():
+                  print(f'{filename}: {error}')
+              sys.exit(1)
+          else:
+              print(f'✅ Successfully loaded {len(dag_bag.dags)} DAG(s)')
+              for dag_id in dag_bag.dags:
+                  print(f'  - {dag_id}')
+          "
+      
+      - name: Check for DAG cycles
+        run: |
+          python -c "
+          import sys
+          import os
+          sys.path.insert(0, os.getcwd())
+          from airflow.models import DagBag
+          
+          dag_bag = DagBag(dag_folder='dags/', include_examples=False)
+          
+          for dag_id, dag in dag_bag.dags.items():
+              try:
+                  dag.test_cycle()
+                  print(f'✅ {dag_id}: No cycles detected')
+              except Exception as e:
+                  print(f'❌ {dag_id}: Cycle detected - {e}')
+                  sys.exit(1)
+          "
+
+  run-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: validate-dags
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock
+      
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=xml
+        continue-on-error: true
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
+
+  trigger-airflow-dag:
+    name: Trigger Airflow DAG
+    runs-on: ubuntu-latest
+    needs: [validate-dags, run-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Wait for Git-Sync to pull changes
+        run: |
+          echo "⏳ Waiting 90 seconds for Git-Sync to pull latest changes..."
+          sleep 90
+      
+      - name: Trigger medical_etl_pipeline DAG
+        id: trigger_dag
+        run: |
+          echo "🚀 Triggering Airflow DAG via API..."
+          
+          RESPONSE=$(curl -X POST \
+            "${{ secrets.AIRFLOW_URL }}/api/v1/dags/medical_etl_pipeline/dagRuns" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Basic $(echo -n '${{ secrets.AIRFLOW_USERNAME }}:${{ secrets.AIRFLOW_PASSWORD }}' | base64)" \
+            -d '{
+              "conf": {
+                "triggered_by": "github_actions",
+                "commit_sha": "${{ github.sha }}",
+                "commit_message": "${{ github.event.head_commit.message }}"
+              }
+            }' \
+            -w "\n%{http_code}" \
+            -s)
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ DAG triggered successfully"
+            echo "dag_run_id=$(echo $BODY | jq -r '.dag_run_id')" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "❌ Failed to trigger DAG"
+            exit 1
+          fi
+      
+      - name: Post DAG Run URL to commit
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dagRunId = '${{ steps.trigger_dag.outputs.dag_run_id }}';
+            const airflowUrl = '${{ secrets.AIRFLOW_URL }}';
+            const message = `🚀 **Airflow DAG Triggered**\n\nDAG Run ID: \`${dagRunId}\`\n[View in Airflow](${airflowUrl}/dags/medical_etl_pipeline/grid)`;
+            
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: message
+            });
+
+  notify-completion:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [validate-dags, run-tests, trigger-airflow-dag]
+    if: always()
+    
+    steps:
+      - name: Send email notification on success
+        if: needs.trigger-airflow-dag.result == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Medical ETL Pipeline - Deployment Successful"
+          to: jaimes.a@northeastern.edu
+          from: Medical ETL CI/CD <${{ secrets.EMAIL_USERNAME }}>
+          body: |
+            The Medical ETL Pipeline has been successfully deployed and triggered.
+            
+            📋 Details:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Commit Message: ${{ github.event.head_commit.message }}
+            - Triggered By: ${{ github.actor }}
+            
+            🔗 Links:
+            - GitHub Actions Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Airflow Dashboard: ${{ secrets.AIRFLOW_URL }}/dags/medical_etl_pipeline/grid
+            
+            The DAG is now running in Airflow. Monitor progress in the dashboard.
+      
+      - name: Send email notification on failure
+        if: needs.validate-dags.result == 'failure' || needs.run-tests.result == 'failure' || needs.trigger-airflow-dag.result == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Medical ETL Pipeline - Deployment Failed"
+          to: jaimes.a@northeastern.edu
+          from: Medical ETL CI/CD <${{ secrets.EMAIL_USERNAME }}>
+          body: |
+            ⚠️ The Medical ETL Pipeline deployment has failed.
+            
+            📋 Details:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Commit Message: ${{ github.event.head_commit.message }}
+            - Triggered By: ${{ github.actor }}
+            
+            ❌ Failed Jobs:
+            - DAG Validation: ${{ needs.validate-dags.result }}
+            - Unit Tests: ${{ needs.run-tests.result }}
+            - DAG Trigger: ${{ needs.trigger-airflow-dag.result }}
+            
+            🔗 View Details:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Please check the logs and fix the issues before the next deployment.
