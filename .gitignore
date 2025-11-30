@@ -60,3 +60,5 @@ data/
 .coverage
 htmlcov/
 *.cover
+
+logging.txt

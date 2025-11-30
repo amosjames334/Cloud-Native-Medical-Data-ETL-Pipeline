@@ -21,6 +21,8 @@ data:
 
 # Enable Git-Sync for DAGs
 dags:
+  persistence:
+    enabled: false
   gitSync:
     enabled: true
     repo: https://github.com/amosjames334/Cloud-Native-Medical-Data-ETL-Pipeline.git

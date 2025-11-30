@@ -2,13 +2,17 @@
 Medical ETL Pipeline DAG
 Orchestrates extraction, transformation, and loading of FDA and clinical trial data
 """
+"""
+Medical ETL Pipeline DAG
+Orchestrates extraction, transformation, and loading of FDA and clinical trial data
+"""
 
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.utils.task_group import TaskGroup
 import yaml
 import os
@@ -165,7 +169,7 @@ with DAG(
 ) as dag:
     
     # Start task
-    start = DummyOperator(task_id='start')
+    start = EmptyOperator(task_id='start')
     
     # Extraction tasks
     with TaskGroup('extraction', tooltip="Extract data from sources") as extraction:
@@ -226,7 +230,7 @@ with DAG(
     )
     
     # End task
-    end = DummyOperator(task_id='end')
+    end = EmptyOperator(task_id='end')
     
     # Define workflow
     start >> extraction >> transform >> quality_checks >> notify >> end
