@@ -53,6 +53,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential \
             libpq-dev \
+            libre2-dev \
             git
       
       - name: Install dependencies
@@ -131,7 +132,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential \
-            libpq-dev
+            libpq-dev \
+            libre2-dev
       
       - name: Install dependencies
         run: |
