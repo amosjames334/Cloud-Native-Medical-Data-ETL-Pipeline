@@ -159,6 +159,13 @@ kubectl create secret generic aws-credentials \
   --from-literal=aws_access_key_id=[YOUR_ACCESS_KEY] \
   --from-literal=aws_secret_access_key=[YOUR_SECRET_KEY]
 
+#if this fails, try using single quotes around the values
+
+kubectl create secret generic aws-credentials `
+  --from-literal=aws_access_key_id=YOUR_KEY `
+  --from-literal=aws_secret_access_key=YOUR_SECRET
+
+
 # Verify secret
 kubectl get secrets
 ```
@@ -170,26 +177,39 @@ kubectl get secrets
 ### 4.1 Build Transform Container
 
 ```bash
-# Navigate to docker directory
-cd docker
 
 # Build image
-docker build -f Dockerfile.transform -t medical-etl-transform:v1 .
+docker build -f docker/Dockerfile.transform -t medical-etl-transform:v1 .
 
 # Verify image
 docker images | grep medical-etl
+
+or  
+
+docker images | Select-String "medical-etl"
+
 ```
 
 ### 4.2 Test Container Locally
 
 ```bash
 # Run test transformation
+# for linux or mac
 docker run --rm \
   -e AWS_ACCESS_KEY_ID=[YOUR_KEY] \
   -e AWS_SECRET_ACCESS_KEY=[YOUR_SECRET] \
   -e S3_BUCKET=medical-etl-data-lake-[YOUR-ID] \
   medical-etl-transform:v1 \
-  python -m src.transformers.drug_transformer --date 2024-01-01
+  python -m src.transformers.drug_transformer --date 2025-11-29
+```
+
+# for windows
+docker run --rm ` 
+  -e AWS_ACCESS_KEY_ID=[YOUR_KEY] ` 
+  -e AWS_SECRET_ACCESS_KEY=[YOUR_SECRET] ` 
+  -e S3_BUCKET=medical-etl-data-lake-[YOUR-ID] ` 
+  medical-etl-transform:v1 ` 
+  python -m src.transformers.drug_transformer --date 2025-11-29 --bucket medical-etl-data-lake-[YOUR-ID]
 ```
 
 ### 4.3 Push to Container Registry (Optional)
@@ -207,81 +227,203 @@ docker push [YOUR_DOCKERHUB_USERNAME]/medical-etl-transform:v1
 
 ## Part 5: Airflow Installation
 
-### 5.1 Install Airflow with Helm
+### 5.0 Install Helm (if not already installed)
 
-```bash
+```powershell
+# If you have Chocolatey:
+choco install kubernetes-helm
+
+# If you don't have Chocolatey, download Helm manually:
+# Go to: https://github.com/helm/helm/releases
+# Download Windows amd64 zip
+# Unzip → move helm.exe to a folder in PATH (e.g., C:\Program Files\helm)
+
+# After installation, restart PowerShell and verify:
+helm version
+
+# If helm is not recognized after installation, refresh PATH:
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+```
+
+### 5.1 Setup External PostgreSQL Database
+
+**Important:** Airflow Helm chart 1.18.0 has a broken PostgreSQL image dependency. We'll use an external PostgreSQL database instead.
+
+```powershell
+# 1. Install PostgreSQL locally (if not already installed)
+choco install postgresql14
+
+# 2. Create Airflow database
+# Open SQL Shell (psql) and press Enter for all prompts to use defaults
+# When prompted for password, enter the password you set during installation
+
+# Then run these SQL commands:
+CREATE DATABASE airflow;
+CREATE USER airflow WITH PASSWORD 'airflow';
+GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+\q
+
+# 3. Verify PostgreSQL service is running
+Get-Service -Name postgresql*
+
+# If not running, start it:
+Start-Service postgresql-x64-14
+```
+
+### 5.2 Install Airflow with Helm
+
+```powershell
 # Add Airflow Helm repository
 helm repo add apache-airflow https://airflow.apache.org
 helm repo update
 
-# Create values.yaml for configuration
-cat > airflow-values.yaml <<EOF
+# Install Airflow with external PostgreSQL
+helm install airflow apache-airflow/airflow `
+  --namespace airflow `
+  --create-namespace `
+  -f airflow-values.yaml `
+  --timeout 15m
+
+# Monitor installation (press Ctrl+C to exit)
+kubectl get pods -n airflow -w
+```
+
+**Expected output:** All pods should reach `Running` status. You should NOT see `airflow-postgresql-0` pod since we're using external PostgreSQL.
+
+**If installation fails:**
+
+```powershell
+# Uninstall and clean up
+helm uninstall airflow -n airflow
+kubectl delete pvc --all -n airflow
+
+# Reinstall
+helm install airflow apache-airflow/airflow `
+  --namespace airflow `
+  --create-namespace `
+  -f airflow-values.yaml `
+  --timeout 15m
+```
+
+### 5.3 Access Airflow UI
+
+```powershell
+# Port-forward to access Airflow UI
+kubectl port-forward svc/airflow-api-server 8080:8080 --namespace airflow
+
+# Open browser and go to: http://localhost:8080
+# Login credentials:
+#   Username: admin
+#   Password: admin
+```
+
+**Note:** Keep the port-forward command running in the terminal to maintain access to the UI.
+
+---
+
+## Part 6: Deploy DAGs with Git-Sync
+
+### 6.1 Push Code to GitHub
+
+Git-Sync automatically syncs your DAGs and source code from a Git repository to Airflow.
+
+```powershell
+# 1. Initialize git repository (if not already done)
+git init
+git add .
+git commit -m "Initial commit: Medical ETL Pipeline"
+
+# 2. Create a new repository on GitHub
+# Go to: https://github.com/new
+# Repository name: Cloud-Native-Medical-Data-ETL-Pipeline
+# Make it public or private
+
+# 3. Push to GitHub
+git remote add origin https://github.com/YOUR_USERNAME/Cloud-Native-Medical-Data-ETL-Pipeline.git
+git branch -M main
+git push -u origin main
+```
+
+### 6.2 Configure Git-Sync in Airflow
+
+Update `airflow-values.yaml` to enable Git-Sync:
+
+```yaml
 executor: KubernetesExecutor
-dags:
-  gitSync:
-    enabled: false
 env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "False"
   - name: AWS_DEFAULT_REGION
     value: "us-east-1"
-EOF
 
-# Install Airflow
-helm install airflow apache-airflow/airflow \
-  --namespace airflow \
-  -f airflow-values.yaml \
-  --timeout 10m
+# Disable embedded PostgreSQL (broken image)
+postgresql:
+  enabled: false
+
+# Use external PostgreSQL connection
+data:
+  metadataConnection:
+    user: airflow
+    pass: airflow
+    protocol: postgresql
+    host: host.docker.internal
+    port: 5432
+    db: airflow
+
+# Enable Git-Sync for DAGs
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/YOUR_USERNAME/Cloud-Native-Medical-Data-ETL-Pipeline.git
+    branch: main
+    rev: HEAD
+    depth: 1
+    maxFailures: 0
+    subPath: "dags"
+    wait: 60
 ```
 
-### 5.2 Access Airflow UI
+### 6.3 Upgrade Airflow with Git-Sync
 
-```bash
-# Port forward to access UI
-kubectl port-forward svc/airflow-webserver 8080:8080 -n airflow
+```powershell
+# Upgrade Airflow installation with new configuration
+helm upgrade airflow apache-airflow/airflow `
+  --namespace airflow `
+  -f airflow-values.yaml `
+  --timeout 15m
 
-# Get admin password
-kubectl get secret airflow-webserver-secret -n airflow -o jsonpath="{.data.webserver-secret-key}" | base64 -d
-
-# Access at: http://localhost:8080
-# Username: admin
-# Password: admin (default, change in production)
+# Monitor the upgrade
+kubectl get pods -n airflow -w
 ```
 
----
+### 6.4 Verify DAGs are Synced
 
-## Part 6: Deploy DAGs
+```powershell
+# Check if git-sync is working
+kubectl logs -n airflow deployment/airflow-scheduler -c git-sync --tail=20
 
-### 6.1 Create Environment Variables
+# List DAGs (wait 1-2 minutes for sync)
+kubectl exec -it deployment/airflow-scheduler -n airflow -- airflow dags list
 
-```bash
-# Create .env file in project root
-cat > .env <<EOF
-AWS_ACCESS_KEY_ID=[YOUR_ACCESS_KEY]
-AWS_SECRET_ACCESS_KEY=[YOUR_SECRET_KEY]
-AWS_DEFAULT_REGION=us-east-1
-S3_BUCKET=medical-etl-data-lake-[YOUR-UNIQUE-ID]
-FDA_API_KEY=  # Optional
-DOCKER_IMAGE=medical-etl-transform:v1
-EOF
+# You should see: medical_etl_pipeline
 ```
 
-### 6.2 Copy DAGs to Airflow
+### 6.5 Create Environment Variables Secret
 
-```bash
-# Copy DAGs to Airflow pod
-kubectl cp dags/medical_etl_dag.py \
-  airflow-scheduler-0:/opt/airflow/dags/ \
-  -n airflow
-
-# Copy config
-kubectl cp dags/config/pipeline_config.yaml \
-  airflow-scheduler-0:/opt/airflow/dags/config/ \
+```powershell
+# Create Kubernetes secret for environment variables
+kubectl create secret generic airflow-env-vars `
+  --from-literal=AWS_ACCESS_KEY_ID=YOUR_KEY `
+  --from-literal=AWS_SECRET_ACCESS_KEY=YOUR_SECRET `
+  --from-literal=S3_BUCKET=medical-etl-data-lake-YOUR-ID `
+  --from-literal=DOCKER_IMAGE=medical-etl-transform:v1 `
   -n airflow
 
 # Verify
-kubectl exec -it airflow-scheduler-0 -n airflow -- ls /opt/airflow/dags
+kubectl get secrets -n airflow
 ```
+
+**Note:** With Git-Sync enabled, any changes you push to your GitHub repository will automatically sync to Airflow within 60 seconds.
 
 ---
 

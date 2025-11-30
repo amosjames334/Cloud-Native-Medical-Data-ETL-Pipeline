@@ -14,8 +14,13 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    cmake \
     libpq-dev \
+    libre2-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install build dependencies
+RUN pip install --no-cache-dir pybind11
 
 # Copy requirements
 COPY requirements.txt .

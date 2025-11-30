@@ -1,0 +1,23 @@
+﻿executor: KubernetesExecutor
+dags:
+  gitSync:
+    enabled: false
+env:
+  - name: AIRFLOW__CORE__LOAD_EXAMPLES
+    value: "False"
+  - name: AWS_DEFAULT_REGION
+    value: "us-east-1"
+
+# Disable embedded PostgreSQL (broken image)
+postgresql:
+  enabled: false
+
+# Use external PostgreSQL connection
+data:
+  metadataConnection:
+    user: airflow
+    pass: airflow
+    protocol: postgresql
+    host: host.docker.internal
+    port: 5432
+    db: airflow
