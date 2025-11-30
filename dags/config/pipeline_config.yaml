@@ -5,7 +5,7 @@ pipeline:
   name: medical_etl_pipeline
   version: "1.0.0"
   description: "ETL pipeline for FDA and clinical trial data"
-  owner: "data-engineering"
+  owner: "Amos-Jaimes"
 
 # Data extraction settings
 extraction:
