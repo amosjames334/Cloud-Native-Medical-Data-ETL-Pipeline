@@ -107,8 +107,15 @@ jobs:
           dag_bag = DagBag(dag_folder='dags/', include_examples=False)
           
           for dag_id, dag in dag_bag.dags.items():
+              # Check if DAG has tasks
+              if len(dag.tasks) == 0:
+                  print(f'⚠️  {dag_id}: No tasks found')
+                  continue
+              
+              # Simple cycle detection by checking task dependencies
               try:
-                  dag.test_cycle()
+                  # This will raise an exception if there's a cycle
+                  dag.topological_sort()
                   print(f'✅ {dag_id}: No cycles detected')
               except Exception as e:
                   print(f'❌ {dag_id}: Cycle detected - {e}')
