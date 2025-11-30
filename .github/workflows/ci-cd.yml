@@ -176,8 +176,8 @@ jobs:
     steps:
       - name: Wait for Git-Sync to pull changes
         run: |
-          echo "⏳ Waiting 90 seconds for Git-Sync to pull latest changes..."
-          sleep 90
+          echo "⏳ Waiting 30 seconds for Git-Sync to pull latest changes..."
+          sleep 30
       
       - name: Trigger medical_etl_pipeline DAG
         id: trigger_dag
@@ -185,7 +185,7 @@ jobs:
           echo "🚀 Triggering Airflow DAG via API..."
           
           RESPONSE=$(curl -X POST \
-            "${{ secrets.AIRFLOW_URL }}/api/v1/dags/medical_etl_pipeline/dagRuns" \
+            "${{ secrets.AIRFLOW_URL }}/api/v2/dags/medical_etl_pipeline/dagRuns" \
             -H "Content-Type: application/json" \
             -H "Authorization: Basic $(echo -n '${{ secrets.AIRFLOW_USERNAME }}:${{ secrets.AIRFLOW_PASSWORD }}' | base64)" \
             -d '{

@@ -49,8 +49,8 @@ class TestFDAExtractor:
         # Test extraction
         extractor = FDAExtractor()
         result = extractor.extract_drug_events(
-            start_date='2024-01-01',
-            end_date='2024-01-01',
+            start_date='2025-01-01',
+            end_date='2025-01-30',
             limit=10
         )
         
@@ -68,8 +68,8 @@ class TestFDAExtractor:
         
         extractor = FDAExtractor()
         result = extractor.extract_drug_events(
-            start_date='2024-01-01',
-            end_date='2024-01-01',
+            start_date='2025-01-01',
+            end_date='2025-01-30',
             limit=10
         )
         
