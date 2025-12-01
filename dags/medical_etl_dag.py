@@ -55,18 +55,18 @@ def extract_fda_data(**context):
     )
     
     # Save raw data to S3
-    s3_hook = S3Hook(aws_conn_id=AWS_CONN_ID)
-    s3_key = f"raw/fda/year={execution_date[:4]}/month={execution_date[5:7]}/day={execution_date[8:10]}/data.json"
+    #s3_hook = S3Hook(aws_conn_id=AWS_CONN_ID)
+    #s3_key = f"raw/fda/year={execution_date[:4]}/month={execution_date[5:7]}/day={execution_date[8:10]}/data.json"
     
-    s3_hook.load_string(
-        string_data=data.to_json(orient='records'),
-        key=s3_key,
-        bucket_name=S3_BUCKET,
-        replace=True
-    )
+    #s3_hook.load_string(
+    #    string_data=data.to_json(orient='records'),
+    #    key=s3_key,
+    #    bucket_name=S3_BUCKET,
+    #    replace=True
+    #)
     
-    context['task_instance'].xcom_push(key='fda_s3_key', value=s3_key)
-    context['task_instance'].xcom_push(key='fda_record_count', value=len(data))
+    context['task_instance'].xcom_push(key='fda_s3_key', value= "abederf")
+    context['task_instance'].xcom_push(key='fda_record_count', value= 29)
     
     return s3_key
 
