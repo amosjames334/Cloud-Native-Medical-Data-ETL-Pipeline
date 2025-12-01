@@ -24,9 +24,9 @@ with open(config_path, 'r') as f:
 
 # Default arguments
 default_args = {
-    'owner': 'data-engineering',
+    'owner': 'Amos Jaimes',
     'depends_on_past': False,
-    'start_date': datetime(2024, 1, 1),
+    'start_date': datetime(2025, 1, 1),
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 2,

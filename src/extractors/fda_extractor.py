@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 class FDAExtractor:
     """Extract data from FDA OpenFDA API"""
     
-    BASE_URL = "https://api.fda.gov/drug/event.json"
+    BASE_URL = "https://api.fda.gov/drug/drugsfda.json"
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -33,10 +33,10 @@ class FDAExtractor:
         self, 
         start_date: str, 
         end_date: str,
-        limit: int = 1000
+        limit: int = 100
     ) -> pd.DataFrame:
         """
-        Extract drug adverse event reports
+        Extract drug details from FDA Drugs@FDA API
         
         Args:
             start_date: Start date in YYYY-MM-DD format
@@ -44,16 +44,29 @@ class FDAExtractor:
             limit: Maximum number of records to fetch
             
         Returns:
-            DataFrame with drug event data
+            DataFrame with drug details
         """
+        # Initialize params dictionary
+        params = {}
         if self.api_key:
             params['api_key'] = self.api_key
+            
+        # Format dates for FDA API (YYYYMMDD)
+        start_str = start_date.replace('-', '')
+        end_str = end_date.replace('-', '')
+        
+        # Construct search query for submissions in the date range
+        params['search'] = f'submissions.submission_status_date:[{start_str} TO {end_str}]'
         
         all_records = []
         skip = 0
         
+        # FDA API limit per request is 99
+        batch_size = 99
+        
         while len(all_records) < limit:
             params['skip'] = skip
+            params['limit'] = min(limit - len(all_records), batch_size)
             
             try:
                 response = self._make_request(params)
@@ -71,7 +84,7 @@ class FDAExtractor:
                 if len(results) < params['limit']:
                     break
                 
-                skip += params['limit']
+                skip += len(results)
                 
                 # Rate limiting
                 time.sleep(0.5)
@@ -81,7 +94,7 @@ class FDAExtractor:
                 break
         
         # Convert to DataFrame
-        df = self._parse_records(all_records[:limit])
+        df = self._parse_records(all_records)
         logger.info(f"Extracted {len(df)} FDA records")
         
         return df
@@ -110,81 +123,61 @@ class FDAExtractor:
                     raise
     
     def _parse_records(self, records: list) -> pd.DataFrame:
-        """Parse FDA records into structured DataFrame"""
+        """Parse FDA drug records into structured DataFrame"""
         parsed_data = []
         
         for record in records:
             try:
-                # Extract key fields
+                # Extract key fields from Drugs@FDA schema
                 parsed = {
-                    'safetyreportid': record.get('safetyreportid'),
-                    'receivedate': record.get('receivedate'),
-                    'serious': record.get('serious', 0),
-                    'seriousnessdeath': record.get('seriousnessdeath', 0),
-                    'seriousnesshospitalization': record.get('seriousnesshospitalization', 0),
-                    'transmissiondate': record.get('transmissiondate'),
-                    'primarysource_qualification': record.get('primarysource', {}).get('qualification'),
-                    'reporterorganization': record.get('primarysource', {}).get('reportercountry')
+                    'application_number': record.get('application_number'),
+                    'sponsor_name': record.get('sponsor_name'),
+                    'openfda_brand_name': None,
+                    'openfda_generic_name': None,
+                    'openfda_manufacturer_name': None
                 }
                 
-                # Extract patient information
-                patient = record.get('patient', {})
-                parsed['patient_age'] = self._extract_age(patient)
-                parsed['patient_sex'] = patient.get('patientsex')
+                # Extract OpenFDA fields if available
+                openfda = record.get('openfda', {})
+                if openfda:
+                    parsed['openfda_brand_name'] = ', '.join(openfda.get('brand_name', []))
+                    parsed['openfda_generic_name'] = ', '.join(openfda.get('generic_name', []))
+                    parsed['openfda_manufacturer_name'] = ', '.join(openfda.get('manufacturer_name', []))
                 
-                # Extract drug information
-                drugs = patient.get('drug', [])
-                if drugs:
-                    parsed['drug_name'] = drugs[0].get('medicinalproduct', '')
-                    parsed['drug_indication'] = drugs[0].get('drugindication', '')
+                # Extract product details (taking the first one for simplicity, or could explode)
+                products = record.get('products', [])
+                if products:
+                    product = products[0]
+                    parsed['brand_name'] = product.get('brand_name')
+                    parsed['active_ingredients'] = ', '.join([item.get('name', '') for item in product.get('active_ingredients', [])])
+                    parsed['dosage_form'] = product.get('dosage_form')
+                    parsed['marketing_status'] = product.get('marketing_status')
                 
-                # Extract reactions
-                reactions = patient.get('reaction', [])
-                if reactions:
-                    parsed['reaction'] = reactions[0].get('reactionmeddrapt', '')
+                # Extract latest submission date
+                submissions = record.get('submissions', [])
+                if submissions:
+                    # Sort by date descending
+                    submissions.sort(key=lambda x: x.get('submission_status_date', ''), reverse=True)
+                    parsed['latest_submission_date'] = submissions[0].get('submission_status_date')
+                    parsed['submission_type'] = submissions[0].get('submission_type')
                 
                 parsed_data.append(parsed)
                 
             except Exception as e:
-                logger.warning(f"Error parsing record {record.get('safetyreportid')}: {e}")
+                logger.warning(f"Error parsing record {record.get('application_number')}: {e}")
                 continue
         
         df = pd.DataFrame(parsed_data)
         
         # Data type conversions
-        if not df.empty:
-            df['receivedate'] = pd.to_datetime(df['receivedate'], format='%Y%m%d', errors='coerce')
-            df['transmissiondate'] = pd.to_datetime(df['transmissiondate'], format='%Y%m%d', errors='coerce')
+        if not df.empty and 'latest_submission_date' in df.columns:
+            df['latest_submission_date'] = pd.to_datetime(df['latest_submission_date'], format='%Y%m%d', errors='coerce')
             
         return df
     
     def _extract_age(self, patient: dict) -> Optional[float]:
-        """Extract and normalize patient age"""
-        try:
-            age_value = patient.get('patientonsetage')
-            age_unit = patient.get('patientonsetageunit')
-            
-            if not age_value:
-                return None
-            
-            age_value = float(age_value)
-            
-            # Convert to years
-            if age_unit == '800':  # Decade
-                return age_value * 10
-            elif age_unit == '801':  # Year
-                return age_value
-            elif age_unit == '802':  # Month
-                return age_value / 12
-            elif age_unit == '803':  # Week
-                return age_value / 52
-            elif age_unit == '804':  # Day
-                return age_value / 365
-            
-            return age_value
-            
-        except Exception:
-            return None
+        """Deprecated: Extract and normalize patient age (kept for compatibility if needed)"""
+        return None
 
 
 if __name__ == '__main__':

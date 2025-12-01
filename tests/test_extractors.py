@@ -16,7 +16,7 @@ class TestFDAExtractor:
         """Test extractor can be initialized"""
         extractor = FDAExtractor()
         assert extractor is not None
-        assert extractor.BASE_URL == "https://api.fda.gov/drug/event.json"
+        assert extractor.BASE_URL == "https://api.fda.gov/drug/drugsfda.json"
     
     def test_extractor_with_api_key(self):
         """Test extractor initialization with API key"""
@@ -32,14 +32,21 @@ class TestFDAExtractor:
         mock_response.json.return_value = {
             'results': [
                 {
-                    'safetyreportid': '123456',
-                    'receivedate': '20240101',
-                    'serious': 1,
-                    'patient': {
-                        'patientsex': '1',
-                        'drug': [{'medicinalproduct': 'ASPIRIN'}],
-                        'reaction': [{'reactionmeddrapt': 'HEADACHE'}]
-                    }
+                    'application_number': 'NDA123456',
+                    'sponsor_name': 'TEST PHARMA',
+                    'products': [
+                        {
+                            'brand_name': 'TEST DRUG',
+                            'active_ingredients': [{'name': 'TEST INGREDIENT'}],
+                            'marketing_status': 'Prescription'
+                        }
+                    ],
+                    'submissions': [
+                        {
+                            'submission_status_date': '20250115',
+                            'submission_type': 'ORIGINAL'
+                        }
+                    ]
                 }
             ]
         }
@@ -56,7 +63,8 @@ class TestFDAExtractor:
         
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
-        assert 'safetyreportid' in result.columns
+        assert 'application_number' in result.columns
+        assert 'brand_name' in result.columns
     
     @patch('src.extractors.fda_extractor.requests.Session.get')
     def test_extract_empty_results(self, mock_get):
@@ -76,33 +84,14 @@ class TestFDAExtractor:
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
     
-    def test_extract_age_conversion(self):
-        """Test age extraction and conversion"""
-        extractor = FDAExtractor()
-        
-        # Test year conversion
-        patient = {'patientonsetage': '50', 'patientonsetageunit': '801'}
-        age = extractor._extract_age(patient)
-        assert age == 50.0
-        
-        # Test month conversion
-        patient = {'patientonsetage': '24', 'patientonsetageunit': '802'}
-        age = extractor._extract_age(patient)
-        assert age == pytest.approx(2.0, rel=0.1)
-        
-        # Test decade conversion
-        patient = {'patientonsetage': '5', 'patientonsetageunit': '800'}
-        age = extractor._extract_age(patient)
-        assert age == 50.0
-    
     def test_parse_records_with_invalid_data(self):
         """Test parsing with invalid/missing data"""
         extractor = FDAExtractor()
         
         records = [
-            {'safetyreportid': '123'},  # Minimal data
+            {'application_number': '123'},  # Minimal data
             {},  # Empty record
-            {'safetyreportid': '456', 'receivedate': '20240101'}
+            {'application_number': '456', 'submissions': []}
         ]
         
         result = extractor._parse_records(records)
