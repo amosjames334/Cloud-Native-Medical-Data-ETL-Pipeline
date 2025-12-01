@@ -140,21 +140,6 @@ This project demonstrates:
 - Data quality management
 - Infrastructure as Code principles
 
-## 📈 Portfolio Value
-
-**Skills Showcased**:
-- Data Engineering fundamentals
-- Cloud computing (AWS)
-- Container technologies (Docker/K8s)
-- Workflow orchestration (Airflow)
-- Healthcare domain knowledge
-- Production-ready code practices
-
-**Ideal For**:
-- Data Engineer positions
-- Healthcare/Pharma tech companies
-- Cloud platform roles
-- ETL/Data Pipeline engineer roles
 
 ## 🔐 Data Governance
 
@@ -184,18 +169,10 @@ This project demonstrates:
 - Manual DAG triggering
 - Performance statistics
 
-## 📝 Next Steps for Enhancement
-
-1. Add data visualization dashboard (Tableau/PowerBI)
-2. Implement real-time streaming with Kafka
-3. Add ML model for drug interaction prediction
-4. Create data catalog with DataHub
-
-
 
 ## 🤝 Contributing
 
-This is a portfolio project, but suggestions welcome via issues.
+This is a portfolio project, but suggestions welcome via issues. Learn, grow, and have fun!
 
 ## 📄 License
 
