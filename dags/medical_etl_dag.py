@@ -35,7 +35,7 @@ default_args = {
 }
 
 # Environment variables
-S3_BUCKET = os.getenv('S3_BUCKET', 'medical-etl-data-lake')
+S3_BUCKET = os.getenv('S3_BUCKET', 'medical-etl-data-amos1234')
 DOCKER_IMAGE = os.getenv('DOCKER_IMAGE', 'medical-etl-transform:v1')
 AWS_CONN_ID = 'aws_default'
 

@@ -9,6 +9,16 @@ A production-grade, cloud-native ETL pipeline for processing FDA drug approvals 
 - Implement proper data quality and governance controls
 - Create a portfolio-ready project for data engineering roles
 
+## 🚀 Getting Started
+
+For complete setup instructions, including prerequisites, installation, and CI/CD configuration, please refer to [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md).
+
+**Quick Links:**
+- [Prerequisites](SETUP_INSTRUCTIONS.md#part-1-prerequisites)
+- [Airflow Installation](SETUP_INSTRUCTIONS.md#part-5-airflow-installation-git-sync-method)
+- [CI/CD & Dashboard](SETUP_INSTRUCTIONS.md#part-8-cicd-pipeline-and-frontend-dashboard-guide)
+
+
 ## 🏗️ Architecture
 
 ```
@@ -106,7 +116,18 @@ medical-etl-pipeline/
 ├── kubernetes/
 │   └── pod-template.yaml
 ├── .env.example
-└── requirements.txt
+├── requirements.txt
+├── scripts/
+│   ├── create-airflow-user.ps1
+│   └── deploy-frontend.ps1
+├── frontend/
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+└── .github/
+    └── workflows/
+        └── ci-cd.yml
+
 ```
 
 ## 🎓 Learning Outcomes
@@ -169,7 +190,8 @@ This project demonstrates:
 2. Implement real-time streaming with Kafka
 3. Add ML model for drug interaction prediction
 4. Create data catalog with DataHub
-5. Implement CI/CD pipeline
+
+
 
 ## 🤝 Contributing
 
@@ -181,10 +203,10 @@ MIT License - Free for educational and portfolio use
 
 ## 📧 Contact
 
-[Your Name]  
-[Your Email]  
-[LinkedIn Profile]  
-[GitHub Profile]
+[Amos Jaimes]  
+[jaimes.a@northeastern.edu]  
+[LinkedIn Profile](https://www.linkedin.com/in/amos-jaimes-a8107621b/)  
+[GitHub Profile](https://github.com/amosjames334)
 
 ---
 

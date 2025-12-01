@@ -1,5 +1,35 @@
 ﻿executor: KubernetesExecutor
 
+images:
+  airflow:
+    repository: medical-etl-airflow
+    tag: v1
+    pullPolicy: IfNotPresent
+
+# secret-backed variables (templated block the chart will render into env[])
+extraEnv: |-
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: airflow-env-vars
+        key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: airflow-env-vars
+        key: AWS_SECRET_ACCESS_KEY
+  - name: S3_BUCKET
+    valueFrom:
+      secretKeyRef:
+        name: airflow-env-vars
+        key: S3_BUCKET
+  - name: DOCKER_IMAGE
+    valueFrom:
+      secretKeyRef:
+        name: airflow-env-vars
+        key: DOCKER_IMAGE
+
+# Plain string envs (must include `value`)
 env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "False"
@@ -22,6 +52,26 @@ webserver:
     ports:
       - name: airflow-ui
         port: 8080
+
+# Ensure workers block contains serviceAccount to avoid nil pointer in template
+workers:
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+# Provide a scheduler block (keep empty but present if templates reference it)
+scheduler:
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+triggerer:
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
 
 postgresql:
   enabled: false
